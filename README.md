@@ -209,5 +209,23 @@ OK
 127.0.0.1:6379>
 ~~~
 
+~~~
+  //缓存管理器
+   @Bean
+    public RedisCacheManager redisCacheManager() {
+        //这里 设置 缓存管理器的配置
+        RedisCacheConfiguration configuration = RedisCacheConfiguration
+                .defaultCacheConfig()
+                .computePrefixWith(cacheName -> cacheName)
+                //头部使用字符串序列化
+                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(RedisSerializer.string()))
+                //有四种方法序列化、默认jdk的序列化
+                .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(RedisSerializer.json()));
+
+        return RedisCacheManager.builder(redisConnectionFactory()).cacheDefaults(configuration).build();
+
+    }
+
+~~~
 
  
