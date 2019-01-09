@@ -228,4 +228,237 @@ OK
 
 ~~~
 
+##### 1、Redis 的 Java API
+
+```java
+Java 中 使用 Redis 工具，要先去 maven 仓库中，下载 jedis jar包
+```
+
+jedis 依赖
+
+```xml
+    <dependency>
+        <groupId>redis.clients</groupId>
+        <artifactId>jedis</artifactId>
+        <version>2.9.0</version>
+     </dependency>
+```
+
+#### 使用
+
+```java
+  //连接 Redis
+        Jedis jedis = new Jedis("localhost", 6379);
+        //如果需要密码
+        //jedis.auth("");
+        //记录操作次数
+        int i = 0;
+        try {
+            long start = System.currentTimeMillis();
+            while (true) {
+                long end = System.currentTimeMillis();
+                //当 大于等于 1000毫秒(1秒)时,结束
+                if (end - start >= 1000) {
+                    break;
+                }
+                i++;
+                jedis.set("testId" + i, i + " ");
+            }
+        } finally {
+            //关闭 Redis
+            jedis.close();
+        }
+        //打印1秒内对 Redis 的操作次数
+        System.out.println("Redis每秒操作：" + i + "次");
+```
+
+结果:
+
+```html
+Redis每秒操作：1753次
+```
+
+使用 流水线技术( 连接池 )，提高速度。
+
+```java
+//配置 连接池
+        JedisPoolConfig config = new JedisPoolConfig();
+        //最大空闲数
+        config.setMaxIdle(50);
+        //最大连接数
+        config.setMaxTotal(100);
+        //最大等待数 毫秒数
+        config.setMaxWaitMillis(20000);
+        //创建 连接池
+        JedisPool pool = new JedisPool(config,"localhost");
+        //从连接池中获取单个连接
+        Jedis jedis = pool.getResource();
+        //如果需要密码
+        //jedis.auth("");
+        //记录操作次数
+        int i = 0;
+        try {
+            long start = System.currentTimeMillis();
+            while (true) {
+                long end = System.currentTimeMillis();
+                //当 大于等于 1000毫秒(1秒)时,结束
+                if (end - start >= 1000) {
+                    break;
+                }
+                i++;
+                jedis.set("testId" + i, i + " ");
+            }
+        } finally {
+            //关闭 Redis
+            jedis.close();
+        }
+        //打印1秒内对 Redis 的操作次数
+        System.out.println("Redis每秒操作：" + i + "次");
+```
+
+运行结果：
+
+```html
+Redis每秒操作：5022次
+```
+
+##### 2、Spring 中 使用 Redis
+
+```
+在Spring中使用Redis，除了需要jedis.jar外，还需要 spring-data-redis.jar 的依赖架包
+```
+
+spring-data-redis.jar 依赖包
+
+```xml
+ <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-redis</artifactId>
+            <version>2.1.3.RELEASE</version>
+</dependency>
+```
+
+#### 注解配置
+
+- 配置连接池
+- 配置Spring所提供的连接工厂
+  - JredisConnectionFactory
+  - JedisConnectionFactory
+  - LettuceConnectionFactory
+  - SrpConnectionFactory     
+
+- 配置Spring RedisTemplate
+
+Spring所提供的连接工厂，无论 如何它们都是接口  RedisConnectionFacory 的实现类
+
+使用 JedisConnectionFactory 较为广泛。
+
+```java
+@Configuration//声明当前类 是配置类
+public class SpringRedisConfig {
+
+    //配置连接池
+    @Bean
+    JedisPoolConfig poolConfig(){
+        //配置连接池
+        JedisPoolConfig config = new JedisPoolConfig();
+        //最大空闲数
+        config.setMaxIdle(50);
+        //最大等待时间
+        config.setMaxWaitMillis(20000);
+        //最大连接数
+        config.setMaxTotal(100);
+        return config;
+    }
+
+    //配置 redis 连接工厂
+    @Bean
+    RedisConnectionFactory connectionFactory(){
+        JedisConnectionFactory connectionFactory = new JedisConnectionFactory(poolConfig());
+        return connectionFactory;
+    }
+
+    //配置 Spring RedisTemplate
+    @Bean
+    StringRedisTemplate redisTemplate(){
+        return new StringRedisTemplate(connectionFactory());
+    }
+}
+
+```
+
+测试示例：
+
+```h
+   public static void main(String[] args) {
+        //扫描 spring 注解
+        AnnotationConfigApplicationContext bean = new AnnotationConfigApplicationContext(SpringRedisConfig.class);
+        // 得到 spring 容器 中 的类
+        StringRedisTemplate stringRedisTemplate = 
+            (StringRedisTemplate) bean.getBean("redisTemplate");
+        //使用 SpringRedisTemplate
+        stringRedisTemplate.boundValueOps("test").set("zhe shi yi ge ce shi !");
+        System.out.println(stringRedisTemplate.boundValueOps("test").get());
+    }
+```
+
+运行效果:
+
+```html
+zhe shi yi ge ce shi !
+```
+
+#### XML配置
+
+配置文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!--配置连接池-->
+    <bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">
+        <!--最大等待时间-->
+        <property name="maxWaitMillis" value="20000"/>
+        <!--最大空闲数-->
+        <property name="maxIdle" value="50"/>
+        <!--最大连接数-->
+        <property name="maxTotal" value="100"/>
+    </bean>
+    <!--Spring 提供的redis连接工厂-->
+    
+    <bean id="connectionFactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">
+        <property name="poolConfig" ref="poolConfig"/>
+    </bean>
+    <!--Spring Template-->
+    <bean id="stringRedisTemplate" class="org.springframework.data.redis.core.StringRedisTemplate">
+        <property name="connectionFactory" ref="connectionFactory"/>
+    </bean>
+
+</beans>
+```
+
+测试类
+
+```java
+    public static void main(String[] args) {
+        //加载 配置文件
+        ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("redisConfig.xml");
+        //从容器中 获取 一个 bean
+        StringRedisTemplate bean = (StringRedisTemplate) context.getBean("stringRedisTemplate");
+        bean.boundValueOps("test").set("zhe shi yi ge jian dan de ce shi ");
+        System.out.println(bean.boundValueOps("test").get());
+    }
+```
+
+运行效果
+
+```html
+zhe shi yi ge jian dan de ce shi 
+```
+
+
+
  
